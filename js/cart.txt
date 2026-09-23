@@ -1,0 +1,171 @@
+// Функция для обновления цен на странице оформления заказа
+function updateCheckoutPrices() {
+    const cartItems = JSON.parse(localStorage.getItem('cartItems')) || {};
+    const games = <?php echo json_encode($games); ?>;
+
+    // Получаем элементы для отображения цен
+    const sumElement = document.querySelector('.checkout-price-container .line:nth-child(1) p:last-child');
+    const discountElement = document.querySelector('.checkout-price-container .line:nth-child(2) p:last-child');
+    const promoCodeElement = document.querySelector('.checkout-price-container .line:nth-child(3) p:last-child');
+    const totalPriceElement = document.querySelector('.checkout-price-container .total-price p:last-child');
+
+    // Рассчитываем сумму заказа и скидку
+    let sum = 0;
+    let totalSalePrice = 0; // Сумма скидок
+    for (const gameId in cartItems) {
+      if (cartItems.hasOwnProperty(gameId)) {
+        const quantity = cartItems[gameId];
+        const game = games.find(game => game.id === gameId.toString());
+        if (game) {
+          const price = game.price;
+          sum += price * quantity;
+          if (game.sale_price && game.sale_price > 0) {
+            totalSalePrice += (game.price - game.sale_price) * quantity; // Рассчитываем сумму скидки
+          }
+        }
+      }
+    }
+
+    // Обновляем отображаемые цены
+    const totalDiscount = (sum - totalSalePrice).toFixed(2);
+    sumElement.textContent = sum.toFixed(2).replace('.00', '') + 'р.';
+    discountElement.textContent = totalSalePrice.toFixed(2).replace('.00', '') + 'р.'; // Обновляем отображаемую скидку
+    promoCodeElement.textContent = '0р.'; // Здесь можно добавить логику для применения промокода
+    totalPriceElement.textContent = totalDiscount.replace('.00', '') + 'р.'; // Полная сумма равна сумме заказа с учетом скидки и промокода
+  }
+
+  // Функция для отображения товаров в корзине
+  function displayCartItems() {
+    // Получаем данные о товарах из локального хранилища
+    const cartItems = JSON.parse(localStorage.getItem('cartItems')) || {};
+    console.log('Данные из локального хранилища:', cartItems);
+
+    // Получаем список всех игр
+    const games = <?php echo json_encode($games); ?>;
+    console.log('Данные из БД:', games);
+
+    // Находим контейнер для корзины
+    const cartContainer = document.getElementById('cart-container');
+
+    // Генерируем HTML для блока "Ваша корзина"
+    const cartHeaderHTML = `
+        <div class="cart-items-header">
+            <h1>Ваша корзина</h1>
+            <img src="svg/bin.svg" alt="" id="clear-cart" style="cursor: pointer;" />
+        </div>
+    `;
+
+    // Очищаем содержимое корзины
+    cartContainer.innerHTML = cartHeaderHTML;
+
+    // Генерируем HTML для товаров в корзине
+    let cartHTML = '';
+    if (Object.keys(cartItems).length === 0) {
+      // Если корзина пуста, добавляем сообщение "Пусто"
+      cartHTML = '<p style="font-size: 28px; align-self:center;">Пусто</p>';
+    } else {
+      for (const gameId in cartItems) {
+        if (cartItems.hasOwnProperty(gameId)) {
+          const quantity = cartItems[gameId];
+
+          // Находим игру по ID
+          const game = games.find(game => game.id === gameId.toString()); // Преобразуем gameId в строку
+
+          if (game) {
+            // Рассчитываем цену товара с учетом количества и возможной скидки
+            const price = game.sale_price && game.sale_price > 0 ? game.sale_price : game.price;
+            const totalPrice = (price * quantity).toFixed(2); // Округляем до двух знаков после запятой
+
+            // Формируем HTML для отображения старой цены, если есть скидка
+            let oldPriceHTML = '';
+            let newPriceHTML = `<p style="margin: 0px 10px">${totalPrice.replace('.00', '')}р.</p>`;
+            if (game.sale_price && game.sale_price > 0) {
+              oldPriceHTML = `<p class="old-price">${game.price}р</p>`;
+            }
+            if (game.sale_price && game.sale_price > 0) {
+              newPriceHTML = `<p class="new-price">${totalPrice.replace('.00', '')}р.</p>`;
+            }
+
+            // Генерируем HTML для товара
+            cartHTML += `
+                        <div class="cart-position" data-product-id="${game.id}">
+                            <a href="/game?game=${game.id}" class="img-container">
+                                <img src="${game.cover_image}" alt="" />
+                            </a>
+                            <a href="/game">${game.name}</a>
+                            <div class="counter" data-product-id="${game.id}">
+                                <button class="minus">-</button>
+                                <div class="number">${quantity}</div>
+                                <button class="plus">+</button>
+                            </div>
+                            <div class="cart-position-price">
+                                ${oldPriceHTML}
+                                ${newPriceHTML}
+                            </div>
+                            <img src="svg/cross.svg" alt="" style="cursor: pointer;" class="remove-item"/> 
+                        </div>
+                    `;
+          }
+        }
+      }
+    }
+
+    // Вставляем сгенерированный HTML для товаров в корзине в контейнер корзины
+    cartContainer.innerHTML += cartHTML;
+
+    // Назначаем обработчики событий для кнопок плюс и минус
+    const minusButtons = document.querySelectorAll('.minus');
+    const plusButtons = document.querySelectorAll('.plus');
+
+    minusButtons.forEach(minusButton => {
+      minusButton.addEventListener('click', (event) => {
+        const productId = event.target.closest('.counter').getAttribute('data-product-id');
+        updateCartItem(productId, -1);
+      });
+    });
+
+    plusButtons.forEach(plusButton => {
+      plusButton.addEventListener('click', (event) => {
+        const productId = event.target.closest('.counter').getAttribute('data-product-id');
+        updateCartItem(productId, 1);
+      });
+    });
+
+    // Назначаем обработчик события для удаления товара из корзины
+    const removeButtons = document.querySelectorAll('.remove-item');
+    removeButtons.forEach(removeButton => {
+      removeButton.addEventListener('click', (event) => {
+        const productId = event.target.closest('.cart-position').getAttribute('data-product-id');
+        removeCartItem(productId);
+        displayCartItems(); // После удаления товара обновляем отображение корзины
+      });
+    });
+
+    // Назначаем обработчик события для очистки всей корзины
+    const clearCartButton = document.getElementById('clear-cart');
+    clearCartButton.addEventListener('click', () => {
+      localStorage.removeItem('cartItems');
+      displayCartItems(); // После очистки корзины обновляем отображение корзины
+    });
+
+    updateCheckoutPrices(); // После отображения товаров обновляем цены на странице оформления заказа
+  }
+
+  // Функция для удаления товара из корзины
+  function removeCartItem(productId) {
+    const cartItems = JSON.parse(localStorage.getItem('cartItems')) || {};
+    delete cartItems[productId];
+    localStorage.setItem('cartItems', JSON.stringify(cartItems));
+    updateCheckoutPrices(); // После удаления товара обновляем цены на странице оформления заказа
+  }
+
+  // Функция для обновления количества товара в корзине
+  function updateCartItem(productId, change) {
+    const cartItems = JSON.parse(localStorage.getItem('cartItems')) || {};
+    cartItems[productId] = Math.max(0, (cartItems[productId] || 0) + change);
+    localStorage.setItem('cartItems', JSON.stringify(cartItems));
+    displayCartItems(); // После обновления количества товара обновляем отображение корзины
+  }
+
+  // Вызываем функцию отображения товаров в корзине при загрузке страницы
+  document.addEventListener('DOMContentLoaded', displayCartItems);
